@@ -1906,6 +1906,19 @@ input[type="search"]::-webkit-search-results-button {
           </div>
         </section>
 
+        <!-- ================= 大全 ================= -->
+        <section class="view view-all" id="view-all" hidden aria-label="全部菜谱">
+          <div class="page">
+            <div class="view-head">
+              <h1 class="view-title">菜谱大全</h1>
+              <p class="view-sub" id="all-sub"></p>
+            </div>
+            <div class="chip-row" id="all-filter"></div>
+            <div class="cards" id="all-list"></div>
+            <div class="empty" id="all-empty" hidden></div>
+          </div>
+        </section>
+
         <!-- ================= 收藏 ================= -->
         <section class="view view-favorites" id="view-favorites" hidden aria-label="我的收藏">
           <div class="page">
@@ -1997,6 +2010,15 @@ input[type="search"]::-webkit-search-results-button {
               <path d="M16.5 16.5L21 21" />
             </svg>
             <span class="tab-label">找菜</span>
+          </button>
+          <button class="tab" data-action="route" data-route="all">
+            <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3.5" y="3.5" width="7" height="7" rx="1.8" />
+              <rect x="13.5" y="3.5" width="7" height="7" rx="1.8" />
+              <rect x="3.5" y="13.5" width="7" height="7" rx="1.8" />
+              <rect x="13.5" y="13.5" width="7" height="7" rx="1.8" />
+            </svg>
+            <span class="tab-label">大全</span>
           </button>
           <button class="tab" data-action="route" data-route="favorites">
             <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -6504,7 +6526,7 @@ return { showToast, hideToast, getToastAction };
 __mod["js/config.js"] = (function () {
 /** 应用级常量 */
 const APP_NAME = '食刻';
-const APP_VERSION = '2.1.0';
+const APP_VERSION = '2.2.0';
 
 /** 空态的示例组合 */
 const DEMO_SETS = [
@@ -7335,6 +7357,120 @@ function renderFavorites(state, recipes, filter = 'all') {
 return { renderFavorites };
 })();
 
+__mod["js/views/catalog.js"] = (function () {
+/** 「大全」：按平台筛选、按菜名排序，全部菜谱一屏一屏往下翻 */
+const { el, qs, replace } = __mod["js/utils/dom.js"];
+const { createCard } = __mod["js/views/components/card.js"];
+const { PLATFORMS } = __mod["js/providers/links.js"];
+const { matchRecipe, buildHaveSet, buildAssumedSet } = __mod["js/match.js"];
+const STEP = 30;
+const PLATFORM_ORDER = ['xiachufang', 'xiaohongshu', 'meishijie', 'douguo', 'bilibili'];
+
+const refs = {};
+let ctx = { recipes: [] };
+let filter = 'all';
+let limit = STEP;
+
+function initCatalog({ recipes }) {
+  ctx = { recipes };
+  refs.sub = qs('#all-sub');
+  refs.filter = qs('#all-filter');
+  refs.list = qs('#all-list');
+  refs.empty = qs('#all-empty');
+}
+
+function setCatalogFilter(next) {
+  filter = next;
+  limit = STEP;
+}
+
+function catalogMore() {
+  limit += STEP;
+}
+
+function renderCatalog(state) {
+  if (!refs.list) return;
+
+  const have = buildHaveSet(state.pantry);
+  const assumed = buildAssumedSet(state.pantry.baseSeasoning);
+
+  const all = ctx.recipes
+    .map((recipe) => matchRecipe(recipe, { have, assumed }))
+    .sort((a, b) => a.recipe.title.localeCompare(b.recipe.title, 'zh-Hans-CN'));
+
+  const counts = new Map();
+  for (const item of all) {
+    const id = item.recipe.source.platform;
+    counts.set(id, (counts.get(id) || 0) + 1);
+  }
+
+  const shown = filter === 'all' ? all : all.filter((r) => r.recipe.source.platform === filter);
+
+  if (refs.sub) {
+    replace(
+      refs.sub,
+      filter === 'all'
+        ? `${shown.length} 道菜谱 · ${counts.size} 个平台`
+        : `${shown.length} 道 · ${PLATFORMS[filter]?.label || ''}`
+    );
+  }
+
+  /* 平台筛选 */
+  replace(
+    refs.filter,
+    el(
+      'button',
+      {
+        class: `chip${filter === 'all' ? ' is-active' : ''}`,
+        type: 'button',
+        'data-action': 'catalog-filter',
+        'data-filter': 'all',
+        'aria-pressed': filter === 'all' ? 'true' : 'false',
+      },
+      `全部 ${all.length}`
+    ),
+    ...PLATFORM_ORDER.filter((id) => counts.get(id)).map((id) =>
+      el(
+        'button',
+        {
+          class: `chip${filter === id ? ' is-active' : ''}`,
+          type: 'button',
+          'data-action': 'catalog-filter',
+          'data-filter': id,
+          'aria-pressed': filter === id ? 'true' : 'false',
+        },
+        `${PLATFORMS[id].label} ${counts.get(id)}`
+      )
+    )
+  );
+
+  /* 列表 */
+  if (!shown.length) {
+    refs.list.replaceChildren();
+    if (refs.empty) {
+      refs.empty.hidden = false;
+      replace(refs.empty, el('p', { class: 'empty-title' }, '这个平台还没有菜谱'));
+    }
+    return;
+  }
+
+  if (refs.empty) refs.empty.hidden = true;
+  replace(
+    refs.list,
+    ...shown.slice(0, limit).map((result, index) => createCard(result, { index })),
+    shown.length > limit
+      ? el(
+          'button',
+          { class: 'more-btn', type: 'button', 'data-action': 'catalog-more' },
+          `显示更多（还有 ${shown.length - limit} 道）`
+        )
+      : null
+  );
+}
+
+return { initCatalog, setCatalogFilter, catalogMore, renderCatalog };
+})();
+
 __mod["js/views/pantry.js"] = (function () {
 /** 「我的」页：常备食材、基础调料假设、外观、数据管理 */
 const { el, qs, replace } = __mod["js/utils/dom.js"];
@@ -7549,6 +7685,7 @@ const {
 const { initHome, renderHome, clearInput, hideSuggest } = __mod["js/views/home.js"];
 const { renderDetail, syncFavorite, currentRecipeId, refreshDetail } = __mod["js/views/detail.js"];
 const { renderFavorites } = __mod["js/views/favorites.js"];
+const { initCatalog, renderCatalog, setCatalogFilter, catalogMore } = __mod["js/views/catalog.js"];
 const { renderPantry } = __mod["js/views/pantry.js"];
 const { renderFilter } = __mod["js/views/filter.js"];
 const { showToast, hideToast, getToastAction } = __mod["js/views/components/toast.js"];
@@ -7607,6 +7744,7 @@ function renderAll() {
   const meta = buildMeta();
 
   renderHome(state, results, { ...meta, limit: listLimit, search: searchQuery });
+  renderCatalog(state);
   renderFavorites(state, recipes, favFilter);
   renderPantry(state, meta);
 
@@ -7703,6 +7841,15 @@ const actions = {
   'toggle-catalog': () => setFlag('catalogCollapsed', !getState().flags.catalogCollapsed),
   'show-more': () => {
     listLimit += 24;
+    renderAll();
+  },
+
+  'catalog-filter': (node) => {
+    setCatalogFilter(node.dataset.filter);
+    renderAll();
+  },
+  'catalog-more': () => {
+    catalogMore();
     renderAll();
   },
 
@@ -7906,6 +8053,7 @@ function boot() {
     },
     onOpenRecipe: (id) => openDetailById(id),
   });
+  initCatalog({ recipes });
   bindSheetBackdrop();
   applyUrlParams();
   subscribe(renderAll);
