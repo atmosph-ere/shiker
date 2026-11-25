@@ -1815,6 +1815,27 @@ input[type="search"]::-webkit-search-results-button {
 .step-text {
   word-break: break-word;
 }
+
+/* ------------------------------------------------------------
+   「其他用到这些食材的菜」（折叠区）
+   ------------------------------------------------------------ */
+.extra {
+  margin-top: 24px;
+}
+
+.extra-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.extra-hint {
+  font-size: var(--fs-small);
+  color: var(--text-3);
+  line-height: 1.6;
+}
 </style>
     <!-- 防白闪：CSS 加载前先铺底色 -->
     <style>
@@ -1901,6 +1922,7 @@ input[type="search"]::-webkit-search-results-button {
               </div>
               <div class="quick-search" id="quick-search" hidden></div>
               <div class="cards" id="cards"></div>
+              <div class="extra" id="extra" hidden></div>
               <div class="empty" id="empty" hidden></div>
             </section>
           </div>
@@ -5872,6 +5894,31 @@ function selectRecipes(recipes, pantry, settings) {
 }
 
 /**
+ * 「还差得较多、但也用得上你手里的东西」的菜
+ * 用于结果下方的折叠区：命中至少 1 个主料，但没进正常结果
+ */
+function selectNearMisses(recipes, pantry, settings, shownIds) {
+  const have = buildHaveSet(pantry);
+  const assumed = buildAssumedSet(pantry.baseSeasoning);
+  const out = [];
+
+  for (const recipe of recipes) {
+    if (shownIds.has(recipe.id)) continue;
+    if (!passFilter(recipe, settings)) continue;
+    const m = matchRecipe(recipe, { have, assumed });
+    if (m.mainHits === 0) continue;
+    out.push(m);
+  }
+
+  out.sort((a, b) => {
+    if (a.missing.length !== b.missing.length) return a.missing.length - b.missing.length;
+    if (b.score !== a.score) return b.score - a.score;
+    return a.recipe.title.localeCompare(b.recipe.title, 'zh-Hans-CN');
+  });
+  return out;
+}
+
+/**
  * 按菜名搜索（输入框里的「直接搜菜谱」）
  * 只做标题匹配：精确 > 前缀 > 包含，再按用时排序
  */
@@ -5904,7 +5951,7 @@ function difficultyLabel(level) {
   return ['', '简单', '适中', '复杂'][level] || '简单';
 }
 
-return { normalize, resolveName, customId, ingredientName, ingredientEmoji, prepareRecipes, matchRecipe, buildHaveSet, buildAssumedSet, matchesSettings, selectRecipes, searchRecipes, difficultyLabel };
+return { normalize, resolveName, customId, ingredientName, ingredientEmoji, prepareRecipes, matchRecipe, buildHaveSet, buildAssumedSet, matchesSettings, selectRecipes, selectNearMisses, searchRecipes, difficultyLabel };
 })();
 
 __mod["js/providers/links.js"] = (function () {
@@ -6526,7 +6573,7 @@ return { showToast, hideToast, getToastAction };
 __mod["js/config.js"] = (function () {
 /** 应用级常量 */
 const APP_NAME = '食刻';
-const APP_VERSION = '2.2.0';
+const APP_VERSION = '2.3.0';
 
 /** 空态的示例组合 */
 const DEMO_SETS = [
@@ -6593,6 +6640,7 @@ function initHome(options = {}) {
   refs.count = qs('#results-count');
   refs.quick = qs('#quick-search');
   refs.cards = qs('#cards');
+  refs.extra = qs('#extra');
   refs.empty = qs('#empty');
 
   buildCatalog();
@@ -6942,6 +6990,11 @@ function renderHome(state, results, meta = {}) {
   const search = (meta.search || '').trim();
   refs.resultsBar.classList.toggle('is-search', Boolean(search));
 
+  if (search || !results.length) {
+    refs.extra.hidden = true;
+    refs.extra.replaceChildren();
+  }
+
   if (search) {
     refs.quick.hidden = true;
     refs.quick.replaceChildren();
@@ -7061,6 +7114,60 @@ function renderHome(state, results, meta = {}) {
           `显示更多（还有 ${results.length - limit} 道）`
         )
       : null
+  );
+
+  renderExtras(meta);
+}
+
+/** 「其他用到这些食材的菜」：差得较多，但确实用得上手里的东西 */
+function renderExtras(meta) {
+  if (!refs.extra) return;
+  const extras = meta.extras || [];
+
+  if (!extras.length) {
+    refs.extra.hidden = true;
+    refs.extra.replaceChildren();
+    return;
+  }
+
+  refs.extra.hidden = false;
+  const open = Boolean(meta.extraOpen);
+  const shown = extras.slice(0, Math.max(1, Number(meta.extraLimit) || 20));
+
+  replace(
+    refs.extra,
+    el(
+      'div',
+      { class: 'section-head extra-head' },
+      el(
+        'h2',
+        { class: 'section-title' },
+        open ? '其他用到这些食材的菜' : `其他用到这些食材的菜（${extras.length}）`
+      ),
+      el(
+        'button',
+        { class: 'mini-toggle', type: 'button', 'data-action': 'toggle-extra' },
+        open ? '收起' : '展开'
+      )
+    ),
+    open
+      ? el(
+          'div',
+          { class: 'cards' },
+          ...shown.map((result, index) => createCard(result, { index })),
+          extras.length > shown.length
+            ? el(
+                'button',
+                { class: 'more-btn', type: 'button', 'data-action': 'extra-more' },
+                `显示更多（还有 ${extras.length - shown.length} 道）`
+              )
+            : null
+        )
+      : el(
+          'p',
+          { class: 'extra-hint' },
+          `这些菜至少还差 ${extras.reduce((min, r) => Math.min(min, r.missing.length), 99)} 种食材，买齐再做也行`
+        )
   );
 }
 
@@ -7660,6 +7767,7 @@ const { qs, qsa, isIOS, isStandalone } = __mod["js/utils/dom.js"];
 const { loadRecipes } = __mod["js/providers/local.js"];
 const {
   selectRecipes,
+  selectNearMisses,
   searchRecipes,
   matchRecipe,
   buildHaveSet,
@@ -7709,6 +7817,8 @@ let themeOverride = null;
 let listLimit = 24;
 let listKey = '';
 let searchQuery = '';
+let extraOpen = false;
+let extraLimit = 20;
 
 /* ============================================================
    渲染
@@ -7741,9 +7851,29 @@ function renderAll() {
   const results = searchQuery
     ? searchRecipes(recipes, searchQuery, state.pantry, matchSettings)
     : selectRecipes(recipes, state.pantry, matchSettings);
+
+  // 结果下方的「其他用到这些食材的菜」：差得较多、但确实用得上手里东西
+  const hasPantry = state.pantry.ids.length + state.pantry.custom.length > 0;
+  const extras =
+    hasPantry && !searchQuery
+      ? selectNearMisses(
+          recipes,
+          state.pantry,
+          matchSettings,
+          new Set(results.map((r) => r.recipe.id))
+        )
+      : [];
+
   const meta = buildMeta();
 
-  renderHome(state, results, { ...meta, limit: listLimit, search: searchQuery });
+  renderHome(state, results, {
+    ...meta,
+    limit: listLimit,
+    search: searchQuery,
+    extras,
+    extraOpen,
+    extraLimit,
+  });
   renderCatalog(state);
   renderFavorites(state, recipes, favFilter);
   renderPantry(state, meta);
@@ -7841,6 +7971,15 @@ const actions = {
   'toggle-catalog': () => setFlag('catalogCollapsed', !getState().flags.catalogCollapsed),
   'show-more': () => {
     listLimit += 24;
+    renderAll();
+  },
+
+  'toggle-extra': () => {
+    extraOpen = !extraOpen;
+    renderAll();
+  },
+  'extra-more': () => {
+    extraLimit += 20;
     renderAll();
   },
 

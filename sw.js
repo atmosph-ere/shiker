@@ -1,5 +1,5 @@
 /* 食刻 mini PWA */
-const VERSION = '2.2.0';
+const VERSION = '2.3.0';
 const CACHE = 'shike-mini-' + VERSION;
 const ASSETS = ['./', './index.html', './apple-touch-icon.png'];
 
