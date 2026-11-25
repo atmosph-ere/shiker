@@ -5536,6 +5536,37 @@ const RAW_RECIPES = [
     ],
     steps: ["黄油下锅化开，放切丁香肠炒出香味","倒入米饭炒散，加盐和牛奶拌到湿润","炒好的饭装进烤碗，表面铺满奶酪碎","200 度烤 15 分钟，奶酪融化起焦斑即可"],
   },
+  {
+    title: "擂椒皮蛋",
+    platform: "xiachufang",
+    time: 15, difficulty: 2, servings: 2, hue: 100, emoji: "🌶",
+    tags: ["凉菜","下饭菜"],
+    ingredients: [
+      { n: "青椒", a: "6 个", r: "main" },
+      { n: "皮蛋", a: "2 个", r: "main" },
+      { n: "大蒜", a: "4 瓣", r: "main" },
+      { n: "生抽", a: "1 勺", r: "seasoning" },
+      { n: "醋", a: "1 勺", r: "seasoning" },
+      { n: "香油", a: "1 勺", r: "seasoning" },
+      { n: "盐", a: "2 g", r: "seasoning" },
+    ],
+    steps: ["青椒去蒂去籽，干锅不放油压着煎","煎到整条起虎皮、变软发蔫盛出","皮蛋剥壳切四瓣，大蒜拍碎","青椒放碗里用擀面杖捣成大块","加皮蛋、蒜末、生抽、醋、香油粗捣几下拌匀","尝咸淡补盐，别捣太碎保留口感"],
+  },
+  {
+    title: "皮蛋炒辣椒",
+    platform: "xiaohongshu",
+    time: 12, difficulty: 1, servings: 2, hue: 95, emoji: "🥚",
+    tags: ["快手菜","下饭菜"],
+    ingredients: [
+      { n: "皮蛋", a: "2 个", r: "main" },
+      { n: "青椒", a: "4 个", r: "main" },
+      { n: "大蒜", a: "3 瓣", r: "main" },
+      { n: "生抽", a: "1 勺", r: "seasoning" },
+      { n: "食用油", a: "15 ml", r: "seasoning" },
+      { n: "盐", a: "1 g", r: "seasoning" },
+    ],
+    steps: ["皮蛋切小块，表面薄薄拍一层淀粉","青椒斜切成圈，大蒜拍碎","热油下皮蛋煎到边缘微焦，盛出备用","原锅下青椒和蒜，大火炒到起虎皮","倒回皮蛋，淋生抽撒盐，翻匀立刻出锅"],
+  },
 ];
 
 return { RAW_RECIPES };
@@ -6515,7 +6546,7 @@ return { showToast, hideToast, getToastAction };
 __mod["js/config.js"] = (function () {
 /** 应用级常量 */
 const APP_NAME = '食刻';
-const APP_VERSION = '1.9.0';
+const APP_VERSION = '1.9.1';
 
 /** 空态的示例组合 */
 const DEMO_SETS = [
