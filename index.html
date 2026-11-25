@@ -521,10 +521,6 @@ input::placeholder {
   text-align: center;
 }
 
-.results-bar.is-search .filter-btn {
-  margin-left: auto;
-}
-
 /* ------------------------------------------------------------
    已选食材
    ------------------------------------------------------------ */
@@ -683,7 +679,7 @@ input::placeholder {
 }
 
 /* ------------------------------------------------------------
-   结果栏（吸顶）
+   结果栏（吸顶）：结果数 + 筛选
    ------------------------------------------------------------ */
 .results {
   margin-top: 26px;
@@ -695,52 +691,13 @@ input::placeholder {
   z-index: 20;
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 10px;
   padding: 10px 0;
   background: var(--bg);
   background: color-mix(in srgb, var(--bg) 92%, transparent);
   -webkit-backdrop-filter: blur(18px) saturate(1.4);
   backdrop-filter: blur(18px) saturate(1.4);
-}
-
-.segment {
-  position: relative;
-  display: flex;
-  flex: 1;
-  height: 38px;
-  padding: 3px;
-  border-radius: 12px;
-  background: var(--surface-2);
-}
-
-.segment-thumb {
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  width: calc(50% - 3px);
-  height: calc(100% - 6px);
-  border-radius: 9px;
-  background: var(--surface);
-  box-shadow: var(--shadow-pill);
-  transition: transform 0.3s var(--ease-out);
-}
-
-.segment[data-mode="loose"] .segment-thumb {
-  transform: translateX(100%);
-}
-
-.segment-btn {
-  position: relative;
-  z-index: 1;
-  flex: 1;
-  font-size: 14px;
-  color: var(--text-2);
-  transition: color 0.2s;
-}
-
-.segment-btn[aria-selected="true"] {
-  color: var(--text);
-  font-weight: 600;
 }
 
 .filter-btn {
@@ -769,9 +726,11 @@ input::placeholder {
 }
 
 .results-count {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
   font-size: var(--fs-small);
   color: var(--text-2);
-  padding: 2px 2px 10px;
 }
 
 .results-count strong {
@@ -1934,17 +1893,12 @@ input[type="search"]::-webkit-search-results-button {
 
             <section class="results" aria-live="polite">
               <div class="results-bar">
-                <div class="segment" id="segment" data-mode="loose" role="tablist" aria-label="匹配模式">
-                  <span class="segment-thumb" aria-hidden="true"></span>
-                  <button class="segment-btn" role="tab" data-action="set-mode" data-mode="strict" aria-selected="false">严格</button>
-                  <button class="segment-btn" role="tab" data-action="set-mode" data-mode="loose" aria-selected="true">宽松</button>
-                </div>
+                <p class="results-count" id="results-count"></p>
                 <button class="filter-btn" id="filter-btn" data-action="open-filter">
                   <span>筛选</span>
                   <span class="filter-dot" id="filter-dot" hidden></span>
                 </button>
               </div>
-              <p class="results-count" id="results-count"></p>
               <div class="quick-search" id="quick-search" hidden></div>
               <div class="cards" id="cards"></div>
               <div class="empty" id="empty" hidden></div>
@@ -5547,7 +5501,7 @@ const RAW_RECIPES = [
       { n: "大蒜", a: "4 瓣", r: "main" },
       { n: "生抽", a: "1 勺", r: "seasoning" },
       { n: "醋", a: "1 勺", r: "seasoning" },
-      { n: "香油", a: "1 勺", r: "seasoning" },
+      { n: "香油", a: "1 勺", r: "seasoning", o: true },
       { n: "盐", a: "2 g", r: "seasoning" },
     ],
     steps: ["青椒去蒂去籽，干锅不放油压着煎","煎到整条起虎皮、变软发蔫盛出","皮蛋剥壳切四瓣，大蒜拍碎","青椒放碗里用擀面杖捣成大块","加皮蛋、蒜末、生抽、醋、香油粗捣几下拌匀","尝咸淡补盐，别捣太碎保留口感"],
@@ -5874,10 +5828,14 @@ function selectRecipes(recipes, pantry, settings) {
     } else {
       // 宽松模式也要「相关」：至少要命中 1 个必需主料，
       // 否则「有土豆 → 缺饺子的煎饺」这种零交集结果会混进来
-      const related =
-        m.relatedHits > 0 || m.required === 0;
+      const related = m.relatedHits > 0 || m.required === 0;
       if (!related) continue;
-      if (m.missing.length > m.threshold) continue;
+
+      const missingMains = m.missing.filter((i) => i.role === 'main').length;
+      // 主料齐了、只差调料（葱姜蒜/花椒/老抽/香油这类）：照样算"能做"，
+      // 否则「选鸡腿看不到三杯鸡」这种明明会做的菜会被阈值挡掉
+      const onlySeasoningsMissing = missingMains === 0 && m.missing.length <= 4;
+      if (!onlySeasoningsMissing && m.missing.length > m.threshold) continue;
     }
     results.push(m);
   }
@@ -6546,7 +6504,7 @@ return { showToast, hideToast, getToastAction };
 __mod["js/config.js"] = (function () {
 /** 应用级常量 */
 const APP_NAME = '食刻';
-const APP_VERSION = '1.9.1';
+const APP_VERSION = '2.1.0';
 
 /** 空态的示例组合 */
 const DEMO_SETS = [
@@ -6607,7 +6565,6 @@ function initHome(options = {}) {
   refs.catalog = qs('#catalog');
   refs.catalogBody = qs('#catalog-body');
   refs.catalogToggle = qs('#catalog-toggle');
-  refs.segment = qs('#segment');
   refs.resultsBar = qs('.results-bar');
   refs.filterBtn = qs('#filter-btn');
   refs.filterDot = qs('#filter-dot');
@@ -6954,12 +6911,6 @@ function renderHome(state, results, meta = {}) {
   refs.catalog.classList.toggle('is-collapsed', state.flags.catalogCollapsed);
   refs.catalogToggle.textContent = state.flags.catalogCollapsed ? '展开食材' : '收起食材';
 
-  /* 匹配模式 */
-  refs.segment.dataset.mode = state.settings.mode;
-  for (const btn of refs.segment.querySelectorAll('.segment-btn')) {
-    btn.setAttribute('aria-selected', btn.dataset.mode === state.settings.mode ? 'true' : 'false');
-  }
-
   /* 筛选态 */
   const filterOn = Boolean(state.settings.maxTime || state.settings.difficulty);
   refs.filterBtn.classList.toggle('is-on', filterOn);
@@ -6968,7 +6919,6 @@ function renderHome(state, results, meta = {}) {
   /* 搜索模式：输入框有内容时，列表变成「菜谱搜索结果」 */
   const search = (meta.search || '').trim();
   refs.resultsBar.classList.toggle('is-search', Boolean(search));
-  refs.segment.hidden = Boolean(search);
 
   if (search) {
     refs.quick.hidden = true;
@@ -7060,44 +7010,21 @@ function renderHome(state, results, meta = {}) {
       return;
     }
 
-    if (state.settings.mode === 'strict') {
-      const looseCount = meta.looseCount || 0;
-      replace(
-        refs.empty,
-        emptyBlock({
-          emoji: '🔍',
-          title: '严格模式下没有完全匹配的菜',
-          desc: looseCount
-            ? `放宽一点，允许缺 1–2 种食材，宽松模式下有 ${looseCount} 道可选。`
-            : '这套组合还差得比较多，换个食材试试。',
-          actions: [
-            pill('切到宽松模式', 'set-mode', { 'data-mode': 'loose' }, true),
-            pill('清空已选', 'clear-pantry'),
-          ],
-        })
-      );
-    } else {
-      replace(
-        refs.empty,
-        emptyBlock({
-          emoji: '🤔',
-          title: '这个组合暂时没找到',
-          desc: '加一样主食或鸡蛋，命中率会高很多。',
-          actions: [pill('清空已选', 'clear-pantry', {}, true)],
-        })
-      );
-    }
+    replace(
+      refs.empty,
+      emptyBlock({
+        emoji: '🤔',
+        title: '这个组合暂时没找到',
+        desc: '加一样主食或鸡蛋，命中率会高很多。',
+        actions: [pill('清空已选', 'clear-pantry', {}, true)],
+      })
+    );
     refs.empty.hidden = false;
     return;
   }
 
   refs.empty.hidden = true;
-  replace(
-    refs.count,
-    el('strong', {}, String(results.length)),
-    ' 道可以做',
-    el('span', { class: 'count-hint' }, state.settings.mode === 'strict' ? ' · 食材全齐' : ' · 允许少量缺失')
-  );
+  replace(refs.count, el('strong', {}, String(results.length)), ' 道可以做');
 
   const limit = Math.max(1, Number(meta.limit) || results.length);
   const visible = results.slice(0, limit);
@@ -7609,7 +7536,6 @@ const {
   addIngredientById,
   removeIngredient,
   clearPantry,
-  setMode,
   setMaxTime,
   setDifficulty,
   setTheme,
@@ -7654,7 +7580,6 @@ let searchQuery = '';
 function buildMeta() {
   const state = getState();
   return {
-    looseCount: selectRecipes(recipes, state.pantry, { ...state.settings, mode: 'loose' }).length,
     recipeCount: recipes.length,
     platformCount: platforms.size,
   };
@@ -7675,9 +7600,10 @@ function renderAll() {
     listLimit = 24;
   }
 
+  const matchSettings = { ...state.settings, mode: 'loose' };
   const results = searchQuery
-    ? searchRecipes(recipes, searchQuery, state.pantry, state.settings)
-    : selectRecipes(recipes, state.pantry, state.settings);
+    ? searchRecipes(recipes, searchQuery, state.pantry, matchSettings)
+    : selectRecipes(recipes, state.pantry, matchSettings);
   const meta = buildMeta();
 
   renderHome(state, results, { ...meta, limit: listLimit, search: searchQuery });
@@ -7780,7 +7706,6 @@ const actions = {
     renderAll();
   },
 
-  'set-mode': (node) => setMode(node.dataset.mode),
   'open-filter': () => {
     renderFilter(getState());
     openSheet(filterSheet());
